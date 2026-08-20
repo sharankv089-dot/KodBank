@@ -1,187 +1,166 @@
-package com.kodbank;
+"""
+Main Bank class for KodBank
+"""
 
-import java.util.*;
+from typing import Optional, List
+from .user import UserManager, User
+from .account import AccountManager, Account, AccountType
+from .transaction import TransactionManager, Transaction, TransactionType
 
-/**
- * Main Bank class that orchestrates all banking operations
- */
-public class Bank {
-    private String bankName;
-    private UserManager userManager;
-    private AccountManager accountManager;
-    private TransactionManager transactionManager;
 
-    public Bank(String bankName) {
-        this.bankName = bankName;
-        this.userManager = new UserManager();
-        this.accountManager = new AccountManager();
-        this.transactionManager = new TransactionManager();
-    }
+class Bank:
+    """Main Bank class that orchestrates all banking operations"""
     
-    @Override
-    public String toString() {
-        return "Bank(" + bankName + ", Users: " + userManager.getUserCount() + 
-               ", Accounts: " + accountManager.getAccountCount() + ")";
-    }
+    def __init__(self, bank_name: str = "KodBank"):
+        self.bank_name = bank_name
+        self.user_manager = UserManager()
+        self.account_manager = AccountManager()
+        self.transaction_manager = TransactionManager()
     
-    // ==================== User Operations ====================
-
-    public User createCustomer(String userId, String name, String email, String phone, String address) {
-        return userManager.createUser(userId, name, email, phone, address);
-    }
-
-    public User getCustomer(String userId) {
-        return userManager.getUser(userId);
-    }
-
-    public boolean updateCustomer(String userId, String name, String email, String phone, String address) {
-        User user = getCustomer(userId);
-        if (user != null) {
-            user.updateProfile(name, email, phone, address);
-            return true;
-        }
-        return false;
-    }
-
-    // ==================== Account Operations ====================
-
-    public Account openAccount(String accountId, String userId, AccountType accountType, double initialBalance) {
-        if (!userManager.userExists(userId)) {
-            throw new IllegalArgumentException("User " + userId + " does not exist");
-        }
-        return accountManager.createAccount(accountId, userId, accountType, initialBalance);
-    }
-
-    public Account getAccount(String accountId) {
-        return accountManager.getAccount(accountId);
-    }
-
-    public List<Account> getCustomerAccounts(String userId) {
-        return accountManager.getUserAccounts(userId);
-    }
-
-    public boolean closeAccount(String accountId) {
-        return accountManager.closeAccount(accountId);
-    }
-
-    // ==================== Transaction Operations ====================
-
-    public boolean deposit(String accountId, double amount, String description) {
-        Account account = getAccount(accountId);
-        if (account == null) {
-            throw new IllegalArgumentException("Account " + accountId + " not found");
-        }
+    def __repr__(self):
+        return f"Bank({self.bank_name}, Users: {len(self.user_manager.users)}, Accounts: {len(self.account_manager.accounts)})"
+    
+    # ==================== User Operations ====================
+    
+    def create_customer(self, user_id: str, name: str, email: str, phone: str, address: str) -> User:
+        """Create a new bank customer"""
+        return self.user_manager.create_user(user_id, name, email, phone, address)
+    
+    def get_customer(self, user_id: str) -> Optional[User]:
+        """Get customer information"""
+        return self.user_manager.get_user(user_id)
+    
+    def update_customer(self, user_id: str, name: str = None, email: str = None,
+                       phone: str = None, address: str = None) -> bool:
+        """Update customer information"""
+        user = self.get_customer(user_id)
+        if user:
+            user.update_profile(name, email, phone, address)
+            return True
+        return False
+    
+    # ==================== Account Operations ====================
+    
+    def open_account(self, account_id: str, user_id: str, account_type: AccountType,
+                    initial_balance: float = 0.0) -> Account:
+        """Open a new bank account"""
+        if not self.user_manager.user_exists(user_id):
+            raise ValueError(f"User {user_id} does not exist")
         
-        Transaction txn = transactionManager.createTransaction(
-            accountId, accountId, amount, TransactionType.DEPOSIT, description
-        );
-        account.deposit(amount);
-        txn.execute();
-        return true;
-    }
-
-    public boolean withdraw(String accountId, double amount, String description) {
-        Account account = getAccount(accountId);
-        if (account == null) {
-            throw new IllegalArgumentException("Account " + accountId + " not found");
+        return self.account_manager.create_account(account_id, user_id, account_type, initial_balance)
+    
+    def get_account(self, account_id: str) -> Optional[Account]:
+        """Get account information"""
+        return self.account_manager.get_account(account_id)
+    
+    def get_customer_accounts(self, user_id: str) -> List[Account]:
+        """Get all accounts for a customer"""
+        return self.account_manager.get_user_accounts(user_id)
+    
+    def close_account(self, account_id: str) -> bool:
+        """Close a bank account"""
+        return self.account_manager.close_account(account_id)
+    
+    # ==================== Transaction Operations ====================
+    
+    def deposit(self, account_id: str, amount: float, description: str = "Deposit") -> bool:
+        """Deposit money into an account"""
+        account = self.get_account(account_id)
+        if not account:
+            raise ValueError(f"Account {account_id} not found")
+        
+        txn = self.transaction_manager.create_transaction(
+            account_id, account_id, amount, TransactionType.DEPOSIT, description
+        )
+        account.deposit(amount)
+        txn.execute()
+        return True
+    
+    def withdraw(self, account_id: str, amount: float, description: str = "Withdrawal") -> bool:
+        """Withdraw money from an account"""
+        account = self.get_account(account_id)
+        if not account:
+            raise ValueError(f"Account {account_id} not found")
+        
+        if amount > account.get_balance():
+            raise ValueError("Insufficient funds")
+        
+        txn = self.transaction_manager.create_transaction(
+            account_id, None, amount, TransactionType.WITHDRAWAL, description
+        )
+        account.withdraw(amount)
+        txn.execute()
+        return True
+    
+    def transfer(self, from_account_id: str, to_account_id: str, amount: float,
+                description: str = "Transfer") -> bool:
+        """Transfer money between accounts"""
+        from_account = self.get_account(from_account_id)
+        to_account = self.get_account(to_account_id)
+        
+        if not from_account or not to_account:
+            raise ValueError("One or both accounts not found")
+        
+        if amount > from_account.get_balance():
+            raise ValueError("Insufficient funds")
+        
+        txn = self.transaction_manager.create_transaction(
+            from_account_id, to_account_id, amount, TransactionType.TRANSFER, description
+        )
+        from_account.transfer(amount, to_account)
+        txn.execute()
+        return True
+    
+    # ==================== Reporting ====================
+    
+    def get_account_statement(self, account_id: str) -> dict:
+        """Get account statement"""
+        account = self.get_account(account_id)
+        if not account:
+            return {}
+        
+        return {
+            'account_id': account.account_id,
+            'account_type': account.account_type.value,
+            'balance': account.get_balance(),
+            'created_at': account.created_at,
+            'is_active': account.is_active,
+            'transactions': account.get_transaction_history()
         }
+    
+    def get_customer_summary(self, user_id: str) -> dict:
+        """Get complete summary for a customer"""
+        user = self.get_customer(user_id)
+        if not user:
+            return {}
         
-        if (amount > account.getBalance()) {
-            throw new IllegalArgumentException("Insufficient funds");
+        accounts = self.get_customer_accounts(user_id)
+        total_balance = sum(acc.get_balance() for acc in accounts)
+        
+        return {
+            'user_id': user.user_id,
+            'name': user.name,
+            'email': user.email,
+            'phone': user.phone,
+            'address': user.address,
+            'total_accounts': len(accounts),
+            'total_balance': total_balance,
+            'accounts': [
+                {
+                    'account_id': acc.account_id,
+                    'type': acc.account_type.value,
+                    'balance': acc.get_balance()
+                }
+                for acc in accounts
+            ]
         }
-        
-        Transaction txn = transactionManager.createTransaction(
-            accountId, null, amount, TransactionType.WITHDRAWAL, description
-        );
-        account.withdraw(amount);
-        txn.execute();
-        return true;
-    }
-
-    public boolean transfer(String fromAccountId, String toAccountId, double amount, String description) {
-        Account fromAccount = getAccount(fromAccountId);
-        Account toAccount = getAccount(toAccountId);
-        
-        if (fromAccount == null || toAccount == null) {
-            throw new IllegalArgumentException("One or both accounts not found");
+    
+    def get_bank_statistics(self) -> dict:
+        """Get overall bank statistics"""
+        return {
+            'bank_name': self.bank_name,
+            'total_customers': len(self.user_manager.users),
+            'total_accounts': len(self.account_manager.accounts),
+            'total_transactions': len(self.transaction_manager.transactions),
+            'total_deposits': sum(acc.get_balance() for acc in self.account_manager.accounts.values())
         }
-        
-        if (amount > fromAccount.getBalance()) {
-            throw new IllegalArgumentException("Insufficient funds");
-        }
-        
-        Transaction txn = transactionManager.createTransaction(
-            fromAccountId, toAccountId, amount, TransactionType.TRANSFER, description
-        );
-        fromAccount.transfer(amount, toAccount);
-        txn.execute();
-        return true;
-    }
-
-    // ==================== Reporting ====================
-
-    public Map<String, Object> getAccountStatement(String accountId) {
-        Account account = getAccount(accountId);
-        if (account == null) {
-            return new HashMap<>();
-        }
-        
-        Map<String, Object> statement = new HashMap<>();
-        statement.put("account_id", account.getAccountId());
-        statement.put("account_type", account.getAccountType().getValue());
-        statement.put("balance", account.getBalance());
-        statement.put("created_at", account.getCreatedAt());
-        statement.put("is_active", account.isActive());
-        statement.put("transactions", account.getTransactionHistory());
-        return statement;
-    }
-
-    public Map<String, Object> getCustomerSummary(String userId) {
-        User user = getCustomer(userId);
-        if (user == null) {
-            return new HashMap<>();
-        }
-        
-        List<Account> accounts = getCustomerAccounts(userId);
-        double totalBalance = 0;
-        for (Account account : accounts) {
-            totalBalance += account.getBalance();
-        }
-        
-        Map<String, Object> summary = new HashMap<>();
-        summary.put("user_id", user.getUserId());
-        summary.put("name", user.getName());
-        summary.put("email", user.getEmail());
-        summary.put("phone", user.getPhone());
-        summary.put("address", user.getAddress());
-        summary.put("total_accounts", accounts.size());
-        summary.put("total_balance", totalBalance);
-        
-        List<Map<String, Object>> accountsList = new ArrayList<>();
-        for (Account account : accounts) {
-            Map<String, Object> accMap = new HashMap<>();
-            accMap.put("account_id", account.getAccountId());
-            accMap.put("type", account.getAccountType().getValue());
-            accMap.put("balance", account.getBalance());
-            accountsList.add(accMap);
-        }
-        summary.put("accounts", accountsList);
-        
-        return summary;
-    }
-
-    public Map<String, Object> getBankStatistics() {
-        double totalDeposits = 0;
-        for (Account account : accountManager.getAllAccounts()) {
-            totalDeposits += account.getBalance();
-        }
-        
-        Map<String, Object> stats = new HashMap<>();
-        stats.put("bank_name", bankName);
-        stats.put("total_customers", userManager.getUserCount());
-        stats.put("total_accounts", accountManager.getAccountCount());
-        stats.put("total_transactions", transactionManager.getTransactionCount());
-        stats.put("total_deposits", totalDeposits);
-        return stats;
-    }
-}
